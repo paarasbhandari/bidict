@@ -25,25 +25,34 @@
 # ← Prev: _base.py         Current: _frozenbidict.py           Next: _mut.py →
 #==============================================================================
 
-"""Provides :class:`frozenbidict`, an immutable, hashable bidirectional mapping type."""
+"""Provide :class:`frozenbidict`, an immutable, hashable bidirectional mapping type."""
 
 from collections.abc import ItemsView
+from typing import cast
 
-from ._base import BidictBase
+from ._base import BidictBase, KT, VT
 from ._delegating import _DelegatingMixin
 
 
-class frozenbidict(_DelegatingMixin, BidictBase):  # noqa: N801; pylint: disable=invalid-name
+class frozenbidict(_DelegatingMixin[KT, VT], BidictBase[KT, VT]):  # type: ignore
     """Immutable, hashable bidict type."""
 
     __slots__ = ()
 
-    def __hash__(self):  # lgtm [py/equals-hash-mismatch]
+    def __hash__(self) -> int:
         """The hash of this bidict as determined by its items."""
         if getattr(self, '_hash', None) is None:
-            # pylint: disable=protected-access,attribute-defined-outside-init
-            self._hash = ItemsView(self)._hash()
+            # pylint: disable=attribute-defined-outside-init
+            self._hash = ItemsView(self)._hash()  # type: ignore
         return self._hash
+
+    @property
+    def inverse(self: 'frozenbidict[KT, VT]') -> 'frozenbidict[VT, KT]':
+        """Overridden only to refine the type hint.
+
+        Ref: https://github.com/python/typing/issues/548
+        """
+        return cast(frozenbidict[VT, KT], super().inverse)
 
 
 #                             * Code review nav *

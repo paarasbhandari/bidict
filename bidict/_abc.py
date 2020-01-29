@@ -26,16 +26,20 @@
 #==============================================================================
 
 
-"""Provides the :class:`BidirectionalMapping` abstract base class."""
+"""Provide the :class:`BidirectionalMapping` and :class:`MutableBidirectionalMapping` ABCs."""
 
 from abc import abstractmethod
-from collections.abc import Mapping
+from typing import Iterator, KeysView, Mapping, MutableMapping, Tuple, TypeVar
 
 
-class BidirectionalMapping(Mapping):  # pylint: disable=abstract-method,no-init
+KT = TypeVar('KT')
+VT = TypeVar('VT')
+
+
+class BidirectionalMapping(Mapping[KT, VT]):
     """Abstract base class (ABC) for bidirectional mapping types.
 
-    Extends :class:`collections.abc.Mapping` primarily by adding the
+    Like :class:`collections.abc.Mapping` with an added
     (abstract) :attr:`inverse` property,
     which implementors of :class:`BidirectionalMapping`
     should override to return a reference to the inverse
@@ -51,7 +55,7 @@ class BidirectionalMapping(Mapping):  # pylint: disable=abstract-method,no-init
 
     @property
     @abstractmethod
-    def inverse(self):
+    def inverse(self) -> 'BidirectionalMapping[VT, KT]':
         """The inverse of this bidirectional mapping instance.
 
         *See also* :attr:`bidict.BidictBase.inverse`, :attr:`bidict.BidictBase.inv`
@@ -65,7 +69,7 @@ class BidirectionalMapping(Mapping):  # pylint: disable=abstract-method,no-init
         # clear there's no reason to call this implementation (e.g. via super() after overriding).
         raise NotImplementedError
 
-    def __inverted__(self):
+    def __inverted__(self) -> Iterator[Tuple[VT, KT]]:
         """Get an iterator over the items in :attr:`inverse`.
 
         This is functionally equivalent to iterating over the items in the
@@ -81,7 +85,7 @@ class BidirectionalMapping(Mapping):  # pylint: disable=abstract-method,no-init
         """
         return iter(self.inverse.items())
 
-    def values(self):
+    def values(self) -> KeysView[VT]:  # type: ignore
         """A set-like object providing a view on the contained values.
 
         Override the implementation inherited from
@@ -93,24 +97,47 @@ class BidirectionalMapping(Mapping):  # pylint: disable=abstract-method,no-init
         which has the advantages of constant-time containment checks
         and supporting set operations.
         """
-        return self.inverse.keys()
+        return self.inverse.keys()  # type: ignore
 
     @classmethod
-    def __subclasshook__(cls, C):  # noqa: N803 (argument name should be lowercase)
-        """Check if *C* is a :class:`~collections.abc.Mapping`
+    def __subclasshook__(cls, C: type) -> bool:
+        """Return whether *C* is a :class:`~collections.abc.Mapping`
         that also provides an ``inverse`` attribute,
-        thus conforming to the :class:`BidirectionalMapping` interface,
-        in which case it will be considered a (virtual) C
-        even if it doesn't explicitly extend it.
+        thus conforming to the :class:`BidirectionalMapping` interface.
+        Allows *C* to be considered a (virtual) :class:`BidirectionalMapping` subclass
+        even if it doesn't explicitly extend :class:`BidirectionalMapping`.
         """
-        if cls is not BidirectionalMapping:  # lgtm [py/comparison-using-is]
+        if cls is not BidirectionalMapping:
             return NotImplemented
-        if not Mapping.__subclasshook__(C):
+        if not Mapping.__subclasshook__(C):  # type: ignore
             return NotImplemented
         mro = C.__mro__
         if not any(B.__dict__.get('inverse') for B in mro):
             return NotImplemented
         return True
+
+
+class MutableBidirectionalMapping(BidirectionalMapping[KT, VT], MutableMapping[KT, VT]):
+    """Abstract base class (ABC) for mutable bidirectional mapping types."""
+
+    __slots__ = ()
+
+    @classmethod
+    def __subclasshook__(cls, C: type) -> bool:
+        """Return whether *C* is a :class:`~collections.abc.MutableMapping`
+        that is also a :class:`BidirectionalMapping`.
+        Allows *C* to be considered a (virtual) :class:`MutableBidirectionalMapping` subclass
+        even if it doesn't explicitly extend :class:`MutableBidirectionalMapping`.
+        """
+        if cls is not MutableBidirectionalMapping:
+            return NotImplemented
+        # Must use "is True" since NotImplemented is truthy.
+        if BidirectionalMapping.__subclasshook__(C) is not True:
+            return NotImplemented
+        if MutableMapping.__subclasshook__(C) is not True:  # type: ignore
+            return NotImplemented
+        return True
+
 
 #                             * Code review nav *
 #==============================================================================

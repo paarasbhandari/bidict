@@ -26,16 +26,25 @@
 #==============================================================================
 
 
-"""Provides :class:`bidict`."""
+"""Provide :class:`bidict`."""
 
+from ._abc import KT, VT
 from ._mut import MutableBidict
 from ._delegating import _DelegatingMixin
 
 
-class bidict(_DelegatingMixin, MutableBidict):  # noqa: N801; pylint: disable=invalid-name
+class bidict(_DelegatingMixin[KT, VT], MutableBidict[KT, VT]):  # type: ignore
     """Base class for mutable bidirectional mappings."""
 
     __slots__ = ()
+
+    @property
+    def inverse(self: 'bidict[KT, VT]') -> 'bidict[VT, KT]':
+        """Overridden only to refine the type hint.
+
+        Ref: https://github.com/python/typing/issues/548
+        """
+        return super().inverse  # type: ignore
 
 
 #                             * Code review nav *
