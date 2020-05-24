@@ -63,7 +63,7 @@ with c_open(join(CWD, 'README.rst'), encoding='utf-8') as f:
 # Manually keep these version pins in sync with those in .travis.yml and .pre-commit-config.yaml.
 
 SETUP_REQS = [
-    'setuptools_scm < 4',
+    'setuptools_scm < 5',
 ]
 
 SPHINX_REQS = [
