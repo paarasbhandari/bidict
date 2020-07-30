@@ -1,35 +1,200 @@
-# -*- coding: utf-8 -*-
-# Copyright 2009-2020 Joshua Bronson. All Rights Reserved.
-#
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-"""Property-based tests using https://hypothesis.readthedocs.io."""
-
 import gc
 import pickle
+import pytest
+import pytest_mutagen as mg
 
+from hypothesis import given, example
 from copy import deepcopy
 from collections import OrderedDict
 from collections.abc import Iterable
 from itertools import tee
 from weakref import ref
-
-import pytest
-from hypothesis import example, given
+from . import _strategies as st
 
 from bidict import (
     BidictException,
-    DROP_OLD, RAISE, OnDup,
-    OrderedBidictBase, OrderedBidict, bidict, namedbidict,
+    DROP_OLD, RAISE, OnDup, ON_DUP_RAISE,
+    OrderedBidictBase, OrderedBidict, BidictBase, MutableBidict, bidict, namedbidict,
     inverted,
 )
+
 from bidict.compat import PYPY
 from bidict._util import _iteritems_args_kw  # pylint: disable=protected-access
 
-from . import _strategies as st
+mg.link_to_file("**all**")
 
+# ***** _base.py: *****
+
+@mg.mutant_of("BidictBase._isinv", "NO_MUTATION")
+
+# _isinv
+
+@mg.mutant_of("BidictBase._isinv", "IS_INV_INVERTED")
+def _isinv(self):
+    return not self._inv is None
+
+@mg.mutant_of("BidictBase._isinv", "IS_INV_TRUE")
+def _isinv(self):
+    return True
+
+@mg.mutant_of("BidictBase._isinv", "IS_INV_FALSE")
+def _isinv(self):
+    return False
+
+# inv
+
+@mg.mutant_of("BidictBase.inv", "INV_IS_SELF")
+def inv(self):
+    return self
+
+@mg.mutant_of("BidictBase.inv", "INV_IS_NONE")
+def inv(self):
+    return None
+
+# inverse
+
+@mg.mutant_of("BidictBase.inverse", "INVERSE_IS_SELF")
+def inverse(self):
+    return self
+
+@mg.mutant_of("BidictBase.inverse", "INVERSE_IS_NONE")
+def inverse(self):
+    return None
+
+# copy
+@mg.mutant_of("BidictBase.copy", "COPY_RETURNS_SELF")
+def copy(self):
+    return self
+
+# _already_have
+
+@mg.mutant_of("BidictBase._already_have", "ALREAD_HAVE_ALWAYS_TRUE")
+def copy(self):
+    return True
+
+@mg.mutant_of("BidictBase._already_have", "ALREAD_HAVE_ALWAYS_FALSE")
+def copy(self):
+    return False
+
+# ***** _orderedbidict.py *****
+
+# clear
+
+@mg.mutant_of("OrderedBidict.clear", "CLEAR_NOOP")
+def clear(self):
+    return
+
+# popitem
+
+@mg.mutant_of("OrderedBidict.popitem", "POP_ITEM_REVERSE")
+def popitem(self, last=True):  # pylint: disable=arguments-differ
+    """*x.popitem() → (k, v)*
+
+    Remove and return the most recently added item as a (key, value) pair
+    if *last* is True, else the least recently added item.
+
+    :raises KeyError: if *x* is empty.
+    """
+
+    last = not last #reversing
+
+    if not self:
+        raise KeyError('mapping is empty')
+    key = next((reversed if last else iter)(self))
+    val = self._pop(key)
+    return key, val
+
+# move_to_end
+
+@mg.mutant_of("OrderedBidict.move_to_end", "MOVE_TO_END_NOOP")
+def move_to_end(self, key, last=True):
+    return
+
+@mg.mutant_of("OrderedBidict.move_to_end", "MOVE_TO_END_REVERSE")
+def move_to_end(self, key, last=True):
+    """Move an existing key to the beginning or end of this ordered bidict.
+
+            The item is moved to the end if *last* is True, else to the beginning.
+
+            :raises KeyError: if the key does not exist
+            """
+
+    last = not last # reversing
+
+    node = self._fwdm[key]
+    node.prv.nxt = node.nxt
+    node.nxt.prv = node.prv
+    sntl = self._sntl
+    if last:
+        last = sntl.prv
+        node.prv = last
+        node.nxt = sntl
+        sntl.prv = last.nxt = node
+    else:
+        first = sntl.nxt
+        node.prv = sntl
+        node.nxt = first
+        sntl.nxt = first.prv = node
+
+# ***** _orderedbase.py *****
+
+@mg.mutant_of("OrderedBidictBase._already_have", "ALREADY_HAVE_FALSE")
+def _already_have(key, val, oldkey, oldval):
+    return True
+
+@mg.mutant_of("OrderedBidictBase._already_have", "ALREADY_HAVE_FALSE")
+def _already_have(key, val, oldkey, oldval):
+    return False
+
+# ***** _mut.py *****
+
+# put
+
+@mg.mutant_of("MutableBidict.put", "PUT_NOOP")
+def put(self, key, val, on_dup=ON_DUP_RAISE):
+    return
+
+# forceput
+
+@mg.mutant_of("MutableBidict.forceput", "FORCEPUT_NOOP")
+def forceput(self, key, val):
+    return
+
+# clear
+
+@mg.mutant_of("MutableBidict.clear", "CLEAR_NOOP")
+def clear(self):
+    return
+
+# pop
+
+@mg.mutant_of("MutableBidict.pop", "POP_RETURNS_NONE")
+def pop(self, key, default):
+    return None
+
+# popitem
+
+@mg.mutant_of("MutableBidict.popitem", "POPITEM_RETURNS_NONE")
+def popitem(self):
+    return None, None
+
+# update
+
+@mg.mutant_of("MutableBidict.update", "UPDATE_NOOP")
+def update(self, *args, **kw):
+    return
+
+# forceupdate
+
+@mg.mutant_of("MutableBidict.forceupdate", "FORCEUPDATE_NOOP")
+def forceupdate(self, *args, **kw):
+    return
+
+# putall
+
+@mg.mutant_of("MutableBidict.putall", "PUTALL_NOOP")
+def putall(self, items, on_dup=ON_DUP_RAISE):
+    return
 
 @given(st.BIDICTS, st.NON_MAPPINGS)
 def test_unequal_to_non_mapping(bi, not_a_mapping):
@@ -38,7 +203,6 @@ def test_unequal_to_non_mapping(bi, not_a_mapping):
     assert bi.inv != not_a_mapping
     assert not bi == not_a_mapping
     assert not bi.inv == not_a_mapping
-
 
 @given(st.BI_AND_MAP_FROM_DIFF_ITEMS)
 def test_unequal_to_mapping_with_different_items(bi_and_map_from_diff_items):
@@ -351,28 +515,6 @@ def test_deepcopy(bi):
     assert cp.inv.inv is not bi
     assert bi == cp
     assert bi.inv == cp.inv
-
-
-def test_iteritems_args_kw_raises_on_too_many_args():
-    """:func:`bidict._iteritems_args_kw` should raise if given too many arguments."""
-    with pytest.raises(TypeError):
-        _iteritems_args_kw('too', 'many', 'args')
-
-
-@given(st.I_PAIRS, st.ODICTS_KW_PAIRS)
-def test_iteritems_args_kw(arg0, kw):
-    """:func:`bidict._iteritems_args_kw` should work correctly."""
-    arg0_1, arg0_2 = tee(arg0)
-    it = _iteritems_args_kw(arg0_1, **kw)
-    # Consume the first `len(arg0)` pairs, checking that they match `arg0`.
-    assert all(check == expect for (check, expect) in zip(it, arg0_2))
-    with pytest.raises(StopIteration):
-        next(arg0_1)  # Iterating `it` should have consumed all of `arg0_1`.
-    # Consume the remaining pairs, checking that they match `kw`.
-    # Once min PY version required is higher, can check that the order matches `kw` too.
-    assert all(kw[k] == v for (k, v) in it)
-    with pytest.raises(StopIteration):
-        next(it)
 
 
 @given(st.L_PAIRS)
